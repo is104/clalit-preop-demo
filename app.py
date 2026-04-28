@@ -1,98 +1,202 @@
 import streamlit as st
+import uuid
+from datetime import datetime
 
-st.set_page_config(page_title="Clalit Pre-Op Demo", layout="centered")
+# =========================
+# PAGE CONFIG
+# =========================
 
-# -------------------------
-# STATE
-# -------------------------
+st.set_page_config(
+    page_title="Clalit - מערכת טרום ניתוח",
+    layout="wide"
+)
 
-STATES = [
-    "intro",
-    "allergies",
-    "medications",
-    "anesthesia",
-    "summary"
-]
+# =========================
+# STATE STORAGE (demo only)
+# =========================
 
-QUESTIONS = {
-    "intro": "שלום 👋 נתחיל באיסוף מידע לפני ניתוח. האם אתה מוכן?",
-    "allergies": "האם יש לך אלרגיות לתרופות?",
-    "medications": "אילו תרופות אתה נוטל?",
-    "anesthesia": "האם היו בעיות בהרדמות קודמות?",
-    "summary": "תודה, סיימנו את האיסוף."
-}
+if "patients" not in st.session_state:
+    st.session_state.patients = {}
 
-PATIENTS = {
-    "normal": {
-        "allergies": "none",
-        "medications": "none",
-        "anesthesia": "none"
-    },
-    "high_risk": {
-        "allergies": "penicillin - anaphylaxis",
-        "medications": "warfarin",
-        "anesthesia": "complication in past surgery"
+if "active_patient" not in st.session_state:
+    st.session_state.active_patient = None
+
+# =========================
+# CREATE PATIENT
+# =========================
+
+def create_patient(name, risk_level):
+
+    pid = str(uuid.uuid4())[:8]
+
+    st.session_state.patients[pid] = {
+        "id": pid,
+        "name": name,
+        "risk": risk_level,
+        "created_at": str(datetime.now()),
+        "data": {},
+        "flags": [],
+        "status": "בתהליך"
     }
-}
 
-def check_risk(data):
+    return pid
+
+# =========================
+# SAFETY ENGINE
+# =========================
+
+def check_flags(data):
+
     flags = []
-    if "anaphylaxis" in data.get("allergies", ""):
-        flags.append("SEVERE_ALLERGY")
-    if "warfarin" in data.get("medications", ""):
-        flags.append("ANTICOAGULANT")
-    if "complication" in data.get("anesthesia", ""):
-        flags.append("ANESTHESIA_RISK")
+
+    if "אנפילקסיס" in str(data.get("אלרגיות", "")):
+        flags.append("סיכון אלרגי חמור")
+
+    if any(x in str(data.get("תרופות", "")) for x in ["warfarin", "eliquis"]):
+        flags.append("נוגדי קרישה")
+
+    if "סיבוך" in str(data.get("הרדמה", "")):
+        flags.append("היסטוריה הרדמתית מורכבת")
+
     return flags
 
-# -------------------------
-# UI STATE
-# -------------------------
+# =========================
+# SIDEBAR - NURSE DASHBOARD
+# =========================
 
-if "i" not in st.session_state:
-    st.session_state.i = 0
+st.sidebar.title("🏥 לוח בקרה")
 
-if "data" not in st.session_state:
-    st.session_state.data = {}
+st.sidebar.subheader("➕ יצירת מטופל חדש")
 
-st.title("🏥 Clalit Pre-Op Intake Demo")
+name = st.sidebar.text_input("שם מטופל")
+risk = st.sidebar.selectbox("רמת סיכון", ["רגיל", "גבוה"])
 
-mode = st.sidebar.selectbox("Patient Type", ["normal", "high_risk"])
+if st.sidebar.button("צור מטופל"):
+    if name:
+        pid = create_patient(name, risk)
+        st.sidebar.success(f"נוצר מטופל: {pid}")
 
-if st.sidebar.button("Reset"):
-    st.session_state.i = 0
-    st.session_state.data = {}
+st.sidebar.divider()
 
-state = STATES[st.session_state.i]
+st.sidebar.subheader("👥 מטופלים פעילים")
 
-st.subheader(f"Step: {state}")
-st.info(QUESTIONS[state])
+for pid, p in st.session_state.patients.items():
+    if st.sidebar.button(f"{p['name']} ({pid})"):
+        st.session_state.active_patient = pid
 
-# -------------------------
-# SIMULATION
-# -------------------------
+# =========================
+# MAIN VIEW
+# =========================
 
-if st.button("Next Step"):
+st.title("🏥 מערכת טרום ניתוח - Clalit")
 
-    if state == "summary":
-        st.success("Demo completed")
-        st.stop()
+if not st.session_state.active_patient:
+    st.info("בחר מטופל מהצד שמאל כדי להתחיל")
+    st.stop()
 
-    if state != "intro":
-        answer = PATIENTS[mode][state]
-        st.write("👤 Patient:", answer)
-        st.session_state.data[state] = answer
+patient = st.session_state.patients[st.session_state.active_patient]
 
-        risks = check_risk(st.session_state.data)
+st.subheader(f"מטופל: {patient['name']} ({patient['id']})")
 
-        if risks:
-            st.error(f"🚨 ESCALATION: {risks}")
-            st.stop()
+col1, col2 = st.columns(2)
 
-    st.session_state.i += 1
-    st.rerun()
+# =========================
+# LEFT: CLINICAL FORM
+# =========================
+
+with col1:
+
+    st.markdown("### 📋 טופס רפואי")
+
+    allergies = st.multiselect(
+        "אלרגיות",
+        ["אין", "פניצילין", "לטקס", "אנפילקסיס"]
+    )
+
+    meds = st.text_area("תרופות קבועות")
+
+    anesthesia = st.radio(
+        "בעיות בהרדמה קודמת?",
+        ["לא", "כן"]
+    )
+
+    mobility = st.selectbox(
+        "תפקוד יומי",
+        ["עצמאי", "עזרה חלקית", "מוגבל"]
+    )
+
+    if st.button("שמור נתונים"):
+
+        patient["data"] = {
+            "אלרגיות": allergies,
+            "תרופות": meds,
+            "הרדמה": anesthesia,
+            "תפקוד": mobility
+        }
+
+        patient["flags"] = check_flags(patient["data"])
+
+        if patient["flags"]:
+            patient["status"] = "⚠️ נדרש בדיקת אחות"
+        else:
+            patient["status"] = "תקין"
+
+        st.success("נשמר בהצלחה")
+
+# =========================
+# RIGHT: CLINICAL VIEW
+# =========================
+
+with col2:
+
+    st.markdown("### 🧑‍⚕️ תצוגה קלינית")
+
+    st.write("סטטוס:")
+    st.success(patient["status"])
+
+    st.write("נתונים:")
+    st.json(patient["data"])
+
+    if patient["flags"]:
+        st.error("🚨 התראות קליניות")
+        st.write(patient["flags"])
+
+# =========================
+# EDUCATION MODULE (HEBREW)
+# =========================
 
 st.divider()
 
-st.subheader("📊 Collected Data")
-st.json(st.session_state.data)
+st.markdown("## 🧑‍⚕️ מידע למטופל (הכנה לניתוח)")
+
+st.markdown("""
+### מה צפוי לפני הניתוח?
+- בדיקות דם
+- פגישה עם רופא מרדים
+- צום של 6–8 שעות לפני הניתוח
+
+### סיכונים כלליים
+- דימום (נדיר)
+- זיהום (נדיר)
+- תגובה להרדמה
+
+### הוראות חשובות
+- יש לדווח על כל תרופה קבועה
+- אין לאכול לפני הניתוח
+- יש להגיע בזמן לבית החולים
+""")
+
+# =========================
+# AUDIT LOG
+# =========================
+
+st.divider()
+
+st.markdown("## 🧾 יומן קליני (Audit)")
+
+st.json({
+    "מטופל": patient["name"],
+    "סטטוס": patient["status"],
+    "דגלים": patient["flags"],
+    "נתונים": patient["data"]
+})
