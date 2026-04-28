@@ -6,7 +6,7 @@ st.set_page_config(
 )
 
 # -------------------------
-# MOBILE STYLING
+# MOBILE CSS
 # -------------------------
 
 st.markdown("""
@@ -33,7 +33,7 @@ st.markdown("""
     text-align: right;
 }
 
-.big-button button {
+.stButton button {
     width: 100%;
     height: 52px;
     border-radius: 12px;
@@ -56,27 +56,16 @@ STEPS = [
 ]
 
 QUESTIONS = {
-    "intro": "שלום 👋 אני עוזר דיגיטלי לפני ניתוח. נתחיל?",
+    "intro": "שלום 👋 אני העוזר הדיגיטלי לפני ניתוח. נתחיל באיסוף מידע רפואי.",
     "allergies": "האם יש לך אלרגיות לתרופות?",
     "medications": "אילו תרופות אתה נוטל ביום-יום?",
     "anesthesia": "האם היו בעיות בהרדמות קודמות?",
     "mobility": "מה רמת התפקוד שלך ביום-יום?",
-    "summary": "תודה 🙏 סיימנו את הבדיקה"
+    "summary": "תודה 🙏 סיימנו את התהליך"
 }
 
 # -------------------------
-# SIMULATED PATIENT (for demo)
-# -------------------------
-
-PATIENT = {
-    "allergies": "אין",
-    "medications": "warfarin",
-    "anesthesia": "סיבוך בניתוח קודם",
-    "mobility": "עצמאי"
-}
-
-# -------------------------
-# STATE
+# STATE INIT
 # -------------------------
 
 if "i" not in st.session_state:
@@ -88,67 +77,83 @@ if "chat" not in st.session_state:
 if "data" not in st.session_state:
     st.session_state.data = {}
 
+if "started" not in st.session_state:
+    st.session_state.started = False
+
 state = STEPS[st.session_state.i]
 
 # -------------------------
-# CHAT DISPLAY
+# INTRO SCREEN (FIXED)
 # -------------------------
 
-def render_chat():
+if not st.session_state.started:
 
-    for msg in st.session_state.chat:
+    st.title("🏥 טרום ניתוח - Clalit")
 
-        if msg["role"] == "bot":
-            st.markdown(
-                f"<div class='chat-bubble bot'>🧑‍⚕️ {msg['text']}</div>",
-                unsafe_allow_html=True
-            )
+    st.markdown("""
+    מערכת דיגיטלית לאיסוף מידע רפואי לפני ניתוח  
+    התהליך לוקח כ-2 דקות בלבד.
+    """)
 
-        else:
-            st.markdown(
-                f"<div class='chat-bubble user'>👤 {msg['text']}</div>",
-                unsafe_allow_html=True
-            )
+    if st.button("▶ התחל תהליך", use_container_width=True):
 
-render_chat()
+        st.session_state.started = True
 
-# -------------------------
-# BOT QUESTION
-# -------------------------
+        st.session_state.chat.append({
+            "role": "bot",
+            "text": QUESTIONS["intro"]
+        })
 
-if len(st.session_state.chat) == 0:
-    st.session_state.chat.append({
-        "role": "bot",
-        "text": QUESTIONS[state]
-    })
+        st.rerun()
+
+    st.stop()
 
 # -------------------------
-# INPUT (mobile style)
+# CHAT RENDER
+# -------------------------
+
+for msg in st.session_state.chat:
+
+    if msg["role"] == "bot":
+        st.markdown(
+            f"<div class='chat-bubble bot'>🧑‍⚕️ {msg['text']}</div>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f"<div class='chat-bubble user'>👤 {msg['text']}</div>",
+            unsafe_allow_html=True
+        )
+
+# -------------------------
+# INPUT
 # -------------------------
 
 st.markdown("---")
 
-user_input = st.text_input("כתוב תשובה כאן")
+user_input = st.text_input("הקלד תשובה כאן")
 
 if st.button("שלח", use_container_width=True):
 
-    # store user message
+    if not user_input:
+        st.stop()
+
+    # user message
     st.session_state.chat.append({
         "role": "user",
         "text": user_input
     })
 
-    # save structured data
-    if state != "intro" and state != "summary":
-        st.session_state.data[state] = user_input
+    current_state = STEPS[st.session_state.i]
 
-    # simulate safety check
-    if "warfarin" in user_input or "סיבוך" in user_input:
-        st.error("🚨 נדרש בירור אחות / רופא")
+    # save structured data (skip intro + summary)
+    if current_state not in ["intro", "summary"]:
+        st.session_state.data[current_state] = user_input
 
     # move forward
     st.session_state.i += 1
 
+    # next question
     if st.session_state.i < len(STEPS):
 
         next_state = STEPS[st.session_state.i]
@@ -161,11 +166,11 @@ if st.button("שלח", use_container_width=True):
     st.rerun()
 
 # -------------------------
-# SUMMARY (mobile friendly)
+# SUMMARY
 # -------------------------
 
 st.markdown("---")
 
-st.markdown("### 📋 סיכום רפואי")
+st.subheader("📋 סיכום רפואי")
 
 st.json(st.session_state.data)
