@@ -1,202 +1,171 @@
 import streamlit as st
-import uuid
-from datetime import datetime
-
-# =========================
-# PAGE CONFIG
-# =========================
 
 st.set_page_config(
-    page_title="Clalit - מערכת טרום ניתוח",
-    layout="wide"
+    page_title="Clalit - טרום ניתוח",
+    layout="centered"
 )
 
-# =========================
-# STATE STORAGE (demo only)
-# =========================
-
-if "patients" not in st.session_state:
-    st.session_state.patients = {}
-
-if "active_patient" not in st.session_state:
-    st.session_state.active_patient = None
-
-# =========================
-# CREATE PATIENT
-# =========================
-
-def create_patient(name, risk_level):
-
-    pid = str(uuid.uuid4())[:8]
-
-    st.session_state.patients[pid] = {
-        "id": pid,
-        "name": name,
-        "risk": risk_level,
-        "created_at": str(datetime.now()),
-        "data": {},
-        "flags": [],
-        "status": "בתהליך"
-    }
-
-    return pid
-
-# =========================
-# SAFETY ENGINE
-# =========================
-
-def check_flags(data):
-
-    flags = []
-
-    if "אנפילקסיס" in str(data.get("אלרגיות", "")):
-        flags.append("סיכון אלרגי חמור")
-
-    if any(x in str(data.get("תרופות", "")) for x in ["warfarin", "eliquis"]):
-        flags.append("נוגדי קרישה")
-
-    if "סיבוך" in str(data.get("הרדמה", "")):
-        flags.append("היסטוריה הרדמתית מורכבת")
-
-    return flags
-
-# =========================
-# SIDEBAR - NURSE DASHBOARD
-# =========================
-
-st.sidebar.title("🏥 לוח בקרה")
-
-st.sidebar.subheader("➕ יצירת מטופל חדש")
-
-name = st.sidebar.text_input("שם מטופל")
-risk = st.sidebar.selectbox("רמת סיכון", ["רגיל", "גבוה"])
-
-if st.sidebar.button("צור מטופל"):
-    if name:
-        pid = create_patient(name, risk)
-        st.sidebar.success(f"נוצר מטופל: {pid}")
-
-st.sidebar.divider()
-
-st.sidebar.subheader("👥 מטופלים פעילים")
-
-for pid, p in st.session_state.patients.items():
-    if st.sidebar.button(f"{p['name']} ({pid})"):
-        st.session_state.active_patient = pid
-
-# =========================
-# MAIN VIEW
-# =========================
-
-st.title("🏥 מערכת טרום ניתוח - Clalit")
-
-if not st.session_state.active_patient:
-    st.info("בחר מטופל מהצד שמאל כדי להתחיל")
-    st.stop()
-
-patient = st.session_state.patients[st.session_state.active_patient]
-
-st.subheader(f"מטופל: {patient['name']} ({patient['id']})")
-
-col1, col2 = st.columns(2)
-
-# =========================
-# LEFT: CLINICAL FORM
-# =========================
-
-with col1:
-
-    st.markdown("### 📋 טופס רפואי")
-
-    allergies = st.multiselect(
-        "אלרגיות",
-        ["אין", "פניצילין", "לטקס", "אנפילקסיס"]
-    )
-
-    meds = st.text_area("תרופות קבועות")
-
-    anesthesia = st.radio(
-        "בעיות בהרדמה קודמת?",
-        ["לא", "כן"]
-    )
-
-    mobility = st.selectbox(
-        "תפקוד יומי",
-        ["עצמאי", "עזרה חלקית", "מוגבל"]
-    )
-
-    if st.button("שמור נתונים"):
-
-        patient["data"] = {
-            "אלרגיות": allergies,
-            "תרופות": meds,
-            "הרדמה": anesthesia,
-            "תפקוד": mobility
-        }
-
-        patient["flags"] = check_flags(patient["data"])
-
-        if patient["flags"]:
-            patient["status"] = "⚠️ נדרש בדיקת אחות"
-        else:
-            patient["status"] = "תקין"
-
-        st.success("נשמר בהצלחה")
-
-# =========================
-# RIGHT: CLINICAL VIEW
-# =========================
-
-with col2:
-
-    st.markdown("### 🧑‍⚕️ תצוגה קלינית")
-
-    st.write("סטטוס:")
-    st.success(patient["status"])
-
-    st.write("נתונים:")
-    st.json(patient["data"])
-
-    if patient["flags"]:
-        st.error("🚨 התראות קליניות")
-        st.write(patient["flags"])
-
-# =========================
-# EDUCATION MODULE (HEBREW)
-# =========================
-
-st.divider()
-
-st.markdown("## 🧑‍⚕️ מידע למטופל (הכנה לניתוח)")
+# -------------------------
+# MOBILE STYLING
+# -------------------------
 
 st.markdown("""
-### מה צפוי לפני הניתוח?
-- בדיקות דם
-- פגישה עם רופא מרדים
-- צום של 6–8 שעות לפני הניתוח
+<style>
+.block-container {
+    max-width: 420px;
+    padding-top: 1rem;
+}
 
-### סיכונים כלליים
-- דימום (נדיר)
-- זיהום (נדיר)
-- תגובה להרדמה
+.chat-bubble {
+    padding: 14px;
+    border-radius: 16px;
+    margin: 10px 0;
+    font-size: 16px;
+    line-height: 1.5;
+}
 
-### הוראות חשובות
-- יש לדווח על כל תרופה קבועה
-- אין לאכול לפני הניתוח
-- יש להגיע בזמן לבית החולים
-""")
+.bot {
+    background-color: #f1f3f5;
+}
 
-# =========================
-# AUDIT LOG
-# =========================
+.user {
+    background-color: #dbeafe;
+    text-align: right;
+}
 
-st.divider()
+.big-button button {
+    width: 100%;
+    height: 52px;
+    border-radius: 12px;
+    font-size: 16px;
+}
+</style>
+""", unsafe_allow_html=True)
 
-st.markdown("## 🧾 יומן קליני (Audit)")
+# -------------------------
+# FLOW
+# -------------------------
 
-st.json({
-    "מטופל": patient["name"],
-    "סטטוס": patient["status"],
-    "דגלים": patient["flags"],
-    "נתונים": patient["data"]
-})
+STEPS = [
+    "intro",
+    "allergies",
+    "medications",
+    "anesthesia",
+    "mobility",
+    "summary"
+]
+
+QUESTIONS = {
+    "intro": "שלום 👋 אני עוזר דיגיטלי לפני ניתוח. נתחיל?",
+    "allergies": "האם יש לך אלרגיות לתרופות?",
+    "medications": "אילו תרופות אתה נוטל ביום-יום?",
+    "anesthesia": "האם היו בעיות בהרדמות קודמות?",
+    "mobility": "מה רמת התפקוד שלך ביום-יום?",
+    "summary": "תודה 🙏 סיימנו את הבדיקה"
+}
+
+# -------------------------
+# SIMULATED PATIENT (for demo)
+# -------------------------
+
+PATIENT = {
+    "allergies": "אין",
+    "medications": "warfarin",
+    "anesthesia": "סיבוך בניתוח קודם",
+    "mobility": "עצמאי"
+}
+
+# -------------------------
+# STATE
+# -------------------------
+
+if "i" not in st.session_state:
+    st.session_state.i = 0
+
+if "chat" not in st.session_state:
+    st.session_state.chat = []
+
+if "data" not in st.session_state:
+    st.session_state.data = {}
+
+state = STEPS[st.session_state.i]
+
+# -------------------------
+# CHAT DISPLAY
+# -------------------------
+
+def render_chat():
+
+    for msg in st.session_state.chat:
+
+        if msg["role"] == "bot":
+            st.markdown(
+                f"<div class='chat-bubble bot'>🧑‍⚕️ {msg['text']}</div>",
+                unsafe_allow_html=True
+            )
+
+        else:
+            st.markdown(
+                f"<div class='chat-bubble user'>👤 {msg['text']}</div>",
+                unsafe_allow_html=True
+            )
+
+render_chat()
+
+# -------------------------
+# BOT QUESTION
+# -------------------------
+
+if len(st.session_state.chat) == 0:
+    st.session_state.chat.append({
+        "role": "bot",
+        "text": QUESTIONS[state]
+    })
+
+# -------------------------
+# INPUT (mobile style)
+# -------------------------
+
+st.markdown("---")
+
+user_input = st.text_input("כתוב תשובה כאן")
+
+if st.button("שלח", use_container_width=True):
+
+    # store user message
+    st.session_state.chat.append({
+        "role": "user",
+        "text": user_input
+    })
+
+    # save structured data
+    if state != "intro" and state != "summary":
+        st.session_state.data[state] = user_input
+
+    # simulate safety check
+    if "warfarin" in user_input or "סיבוך" in user_input:
+        st.error("🚨 נדרש בירור אחות / רופא")
+
+    # move forward
+    st.session_state.i += 1
+
+    if st.session_state.i < len(STEPS):
+
+        next_state = STEPS[st.session_state.i]
+
+        st.session_state.chat.append({
+            "role": "bot",
+            "text": QUESTIONS[next_state]
+        })
+
+    st.rerun()
+
+# -------------------------
+# SUMMARY (mobile friendly)
+# -------------------------
+
+st.markdown("---")
+
+st.markdown("### 📋 סיכום רפואי")
+
+st.json(st.session_state.data)
